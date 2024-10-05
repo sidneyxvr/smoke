@@ -26,6 +26,7 @@ var fragmentShaderSource = """
 GL gl = null!;
 uint vao = 0;
 uint vbo = 0;
+uint ebo = 0;
 
 uint shaderProgram = 0;
 
@@ -35,7 +36,25 @@ using var window = Window.Create(WindowOptions.Default with
     Title = "LearnOpenGL"
 });
 
-window.Load += () =>
+window.Load += OnLoad;
+
+window.FramebufferResize += FrameBufferResize;
+
+window.Render += OnRender;
+
+window.Run();
+
+unsafe void OnRender(double _)
+{
+    gl.ClearColor(System.Drawing.Color.DarkGreen);
+    gl.Clear(ClearBufferMask.ColorBufferBit);
+
+    gl.BindVertexArray(vao);
+    gl.UseProgram(shaderProgram);
+
+    gl.DrawElements(PrimitiveType.Triangles, count: 6, DrawElementsType.UnsignedInt, null);
+};
+void OnLoad()
 {
     var input = window.CreateInput();
     for (int i = 0; i < input.Keyboards.Count; i++)
@@ -43,14 +62,19 @@ window.Load += () =>
         input.Keyboards[i].KeyDown += KeyDown;
     }
 
-    gl = GL.GetApi(window);
-
-
     ReadOnlySpan<float> buffer = [
-        -0.5f,-0.5f, 0.0f,
-        0.5f,-0.5f, 0.0f,
-        0.0f, 0.5f, 0.0f
+         0.5f, 0.5f, 0.0f, // top right
+         0.5f,-0.5f, 0.0f, // bottom right
+        -0.5f,-0.5f, 0.0f, // bottom left
+        -0.5f, 0.5f, 0.0f // top left
     ];
+
+    ReadOnlySpan<uint> indices = [
+        0, 1, 3,
+        1, 2, 3
+    ];
+
+    gl = GL.GetApi(window);
 
     vao = gl.GenVertexArray();
     gl.BindVertexArray(vao);
@@ -58,6 +82,10 @@ window.Load += () =>
     vbo = gl.GenBuffer();
     gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
     gl.BufferData(BufferTargetARB.ArrayBuffer, buffer, BufferUsageARB.StaticDraw);
+
+    ebo = gl.GenBuffer();
+    gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, ebo);
+    gl.BufferData(BufferTargetARB.ElementArrayBuffer, indices, BufferUsageARB.StaticDraw);
 
     var vexterShader = gl.CreateShader(ShaderType.VertexShader);
     gl.ShaderSource(vexterShader, vextexShaderSource);
@@ -85,21 +113,6 @@ window.Load += () =>
 
     gl.EnableVertexAttribArray(0);
 };
-
-window.FramebufferResize += FrameBufferResize;
-
-window.Render += delta =>
-{
-    gl.ClearColor(System.Drawing.Color.DarkGreen);
-    gl.Clear(ClearBufferMask.ColorBufferBit);
-
-    gl.UseProgram(shaderProgram);
-    gl.BindVertexArray(vao);
-
-    gl.DrawArrays(PrimitiveType.Triangles, first: 0, count: 3);
-};
-
-window.Run();
 
 void FrameBufferResize(Vector2D<int> size)
 {
