@@ -3,126 +3,140 @@ using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 
-var vextexShaderSource = """
-    #version 330 core
-    layout (location = 0) in vec3 aPos;
-    
-    void main()
-    {
-        gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-    }
-    """;
+var game = new Game();
+game.Run();
 
-var fragmentShaderSource = """
-    #version 330 core
-    out vec4 FragColor;
-    
-    void main()
-    {
-        FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
-    }
-    """;
-
-GL gl = null!;
-uint vao = 0;
-uint vbo = 0;
-uint ebo = 0;
-
-uint shaderProgram = 0;
-
-using var window = Window.Create(WindowOptions.Default with
+public class Game : IDisposable
 {
-    Size = new Vector2D<int>(800, 600),
-    Title = "LearnOpenGL"
-});
+    private Calango.Smoke.Engine.Shader _shader = null!;
 
-window.Load += OnLoad;
+    private GL _gl = null!;
+    private readonly IWindow _window;
+    private IInputContext _inputContext = null!;
 
-window.FramebufferResize += FrameBufferResize;
+    private uint _vao = 0;
+    private uint _vbo = 0;
+    private uint _ebo = 0;
 
-window.Render += OnRender;
+    private uint _shaderProgram = 0;
 
-window.Run();
-
-unsafe void OnRender(double _)
-{
-    gl.ClearColor(System.Drawing.Color.DarkGreen);
-    gl.Clear(ClearBufferMask.ColorBufferBit);
-
-    gl.BindVertexArray(vao);
-    gl.UseProgram(shaderProgram);
-
-    gl.DrawElements(PrimitiveType.Triangles, count: 6, DrawElementsType.UnsignedInt, null);
-};
-void OnLoad()
-{
-    var input = window.CreateInput();
-    for (int i = 0; i < input.Keyboards.Count; i++)
+    public Game()
     {
-        input.Keyboards[i].KeyDown += KeyDown;
+        _window = Window.Create(WindowOptions.Default with
+        {
+            Size = new Vector2D<int>(800, 600),
+            Title = "LearnOpenGL"
+        });
     }
 
-    ReadOnlySpan<float> buffer = [
-         0.5f, 0.5f, 0.0f, // top right
-         0.5f,-0.5f, 0.0f, // bottom right
-        -0.5f,-0.5f, 0.0f, // bottom left
-        -0.5f, 0.5f, 0.0f // top left
-    ];
-
-    ReadOnlySpan<uint> indices = [
-        0, 1, 3,
-        1, 2, 3
-    ];
-
-    gl = GL.GetApi(window);
-
-    vao = gl.GenVertexArray();
-    gl.BindVertexArray(vao);
-
-    vbo = gl.GenBuffer();
-    gl.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-    gl.BufferData(BufferTargetARB.ArrayBuffer, buffer, BufferUsageARB.StaticDraw);
-
-    ebo = gl.GenBuffer();
-    gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, ebo);
-    gl.BufferData(BufferTargetARB.ElementArrayBuffer, indices, BufferUsageARB.StaticDraw);
-
-    var vexterShader = gl.CreateShader(ShaderType.VertexShader);
-    gl.ShaderSource(vexterShader, vextexShaderSource);
-    gl.CompileShader(vexterShader);
-
-    var fragmentShader = gl.CreateShader(ShaderType.FragmentShader);
-    gl.ShaderSource(fragmentShader, fragmentShaderSource);
-    gl.CompileShader(fragmentShader);
-
-    shaderProgram = gl.CreateProgram();
-    gl.AttachShader(shaderProgram, vexterShader);
-    gl.AttachShader(shaderProgram, fragmentShader);
-    gl.LinkProgram(shaderProgram);
-
-    gl.DeleteShader(vexterShader);
-    gl.DeleteShader(fragmentShader);
-
-    gl.VertexAttribPointer(
-        index: 0,
-        size: 3,
-        VertexAttribPointerType.Float,
-        normalized: false,
-        3 * sizeof(float),
-        IntPtr.Zero);
-
-    gl.EnableVertexAttribArray(0);
-};
-
-void FrameBufferResize(Vector2D<int> size)
-{
-    gl.Viewport(size);
-}
-
-void KeyDown(IKeyboard arg1, Key arg2, int _)
-{
-    if (arg2 == Key.Escape)
+    public void Run()
     {
-        window.Close();
+        _window.Load += OnLoad;
+
+        _window.FramebufferResize += FrameBufferResize;
+
+        _window.Render += OnRender;
+
+        _window.Run();
+
+        ReadOnlySpan<float> vertices = [
+             // positions       // colors
+             0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom right
+            -0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, // bottom left
+             0.0f,  0.5f, 0.0f, 0.0f, 0.0f, 1.0f  // top
+        ];
+    }
+
+    private void OnRender(double delta)
+    {
+        //var greenValue = MathF.Sin(Random.Shared.NextSingle()) / 2.0f + 0.5f;
+        //var vertexColorLocation = Gl.GetUniformLocation(shaderProgram, "ourColor");
+
+        //Gl.UseProgram(shaderProgram);
+        //Gl.Uniform4(vertexColorLocation, 0.0f, greenValue, 0.0f, 1.0f);
+
+        _shader.Use();
+
+        _gl.ClearColor(System.Drawing.Color.DarkGreen);
+        _gl.Clear(ClearBufferMask.ColorBufferBit);
+
+        _gl.BindVertexArray(_vao);
+
+
+        _gl.DrawArrays(PrimitiveType.Triangles, 0, 18);
+    }
+
+    private void OnLoad()
+    {
+        _inputContext = _window.CreateInput();
+        for (int i = 0; i < _inputContext.Keyboards.Count; i++)
+        {
+            _inputContext.Keyboards[i].KeyDown += KeyDown;
+        }
+
+        ReadOnlySpan<float> vertices = [
+             // positions       // colors
+             0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom right
+            -0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, // bottom left
+             0.0f,  0.5f, 0.0f, 0.0f, 0.0f, 1.0f  // top
+        ];
+
+        //ReadOnlySpan<uint> indices = [
+        //    0, 1, 3,
+        //    1, 2, 3
+        //];
+
+        _gl = GL.GetApi(_window);
+
+        _shader = new Calango.Smoke.Engine.Shader(_gl);
+
+        _vao = _gl.GenVertexArray();
+        _gl.BindVertexArray(_vao);
+
+        _vbo = _gl.GenBuffer();
+        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
+        _gl.BufferData(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.StaticDraw);
+
+        //ebo = Gl.GenBuffer();
+        //Gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, ebo);
+        //Gl.BufferData(BufferTargetARB.ElementArrayBuffer, indices, BufferUsageARB.StaticDraw);
+
+        _gl.VertexAttribPointer(
+            index: 0,
+            size: 3,
+            VertexAttribPointerType.Float,
+            normalized: false,
+            stride: 6 * sizeof(float),
+            IntPtr.Zero);
+
+        _gl.EnableVertexAttribArray(0);
+
+        _gl.VertexAttribPointer(
+            index: 1,
+            size: 3,
+            VertexAttribPointerType.Float,
+            normalized: false,
+            stride: 6 * sizeof(float),
+            3 * sizeof(float));
+
+        _gl.EnableVertexAttribArray(1);
+    }
+
+    private void FrameBufferResize(Vector2D<int> size)
+    {
+        _gl.Viewport(size);
+    }
+
+    private void KeyDown(IKeyboard arg1, Key arg2, int _)
+    {
+        if (arg2 == Key.Escape)
+        {
+            _window.Close();
+        }
+    }
+
+    public void Dispose()
+    {
+        _window.Dispose();
     }
 }
