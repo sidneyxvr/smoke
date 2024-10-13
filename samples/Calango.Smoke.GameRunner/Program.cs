@@ -2,13 +2,15 @@
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 var game = new Game();
 game.Run();
 
 public class Game : IDisposable
 {
-    private Calango.Smoke.Engine.Shader _shader = null!;
+    private Calango.Smoke.Shader _shader = null!;
 
     private GL _gl = null!;
     private readonly IWindow _window;
@@ -17,8 +19,7 @@ public class Game : IDisposable
     private uint _vao = 0;
     private uint _vbo = 0;
     private uint _ebo = 0;
-
-    private uint _shaderProgram = 0;
+    private uint _texture = 0;
 
     public Game()
     {
@@ -38,16 +39,9 @@ public class Game : IDisposable
         _window.Render += OnRender;
 
         _window.Run();
-
-        ReadOnlySpan<float> vertices = [
-             // positions       // colors
-             0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom right
-            -0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, // bottom left
-             0.0f,  0.5f, 0.0f, 0.0f, 0.0f, 1.0f  // top
-        ];
     }
 
-    private void OnRender(double delta)
+    private unsafe void OnRender(double delta)
     {
         //var greenValue = MathF.Sin(Random.Shared.NextSingle()) / 2.0f + 0.5f;
         //var vertexColorLocation = Gl.GetUniformLocation(shaderProgram, "ourColor");
@@ -63,7 +57,7 @@ public class Game : IDisposable
         _gl.BindVertexArray(_vao);
 
 
-        _gl.DrawArrays(PrimitiveType.Triangles, 0, 18);
+        _gl.DrawElements(PrimitiveType.Triangles, 6, DrawElementsType.UnsignedInt, null);
     }
 
     private void OnLoad()
@@ -75,20 +69,21 @@ public class Game : IDisposable
         }
 
         ReadOnlySpan<float> vertices = [
-             // positions       // colors
-             0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom right
-            -0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, // bottom left
-             0.0f,  0.5f, 0.0f, 0.0f, 0.0f, 1.0f  // top
+            // positions        // colors         // texture coords
+             0.5f,  0.5f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f, // top right
+             0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, // bottom right
+            -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, // bottom left
+            -0.5f,  0.5f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f // top left
         ];
 
-        //ReadOnlySpan<uint> indices = [
-        //    0, 1, 3,
-        //    1, 2, 3
-        //];
+        ReadOnlySpan<uint> indices = [
+            0, 1, 3,
+            1, 2, 3
+        ];
 
         _gl = GL.GetApi(_window);
 
-        _shader = new Calango.Smoke.Engine.Shader(_gl);
+        _shader = new(_gl);
 
         _vao = _gl.GenVertexArray();
         _gl.BindVertexArray(_vao);
@@ -97,16 +92,36 @@ public class Game : IDisposable
         _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
         _gl.BufferData(BufferTargetARB.ArrayBuffer, vertices, BufferUsageARB.StaticDraw);
 
-        //ebo = Gl.GenBuffer();
-        //Gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, ebo);
-        //Gl.BufferData(BufferTargetARB.ElementArrayBuffer, indices, BufferUsageARB.StaticDraw);
+        _ebo = _gl.GenBuffer();
+        _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, _ebo);
+        _gl.BufferData(BufferTargetARB.ElementArrayBuffer, indices, BufferUsageARB.StaticDraw);
+
+        using var image = Image.Load<Rgba32>(@"C:\Users\sidne\Source\Repos\smoke\samples\Calango.Smoke.GameRunner\Assets\texture-sample.jpg");
+
+        var pixelData = new byte[image.Width * image.Height * 4];
+
+        image.CopyPixelDataTo(pixelData);
+
+        _texture = _gl.GenTexture();
+        _gl.ActiveTexture(TextureUnit.Texture0);
+        _gl.BindTexture(TextureTarget.Texture2D, _texture);
+
+        _gl.TextureParameter(_texture, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
+        _gl.TextureParameter(_texture, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
+
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMinFilter.Linear);
+
+        _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)image.Width, (uint)image.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, (ReadOnlySpan<byte>)pixelData);
+
+        _gl.GenerateMipmap(TextureTarget.Texture2D);
 
         _gl.VertexAttribPointer(
             index: 0,
             size: 3,
             VertexAttribPointerType.Float,
             normalized: false,
-            stride: 6 * sizeof(float),
+            stride: 8 * sizeof(float),
             IntPtr.Zero);
 
         _gl.EnableVertexAttribArray(0);
@@ -116,10 +131,20 @@ public class Game : IDisposable
             size: 3,
             VertexAttribPointerType.Float,
             normalized: false,
-            stride: 6 * sizeof(float),
+            stride: 8 * sizeof(float),
             3 * sizeof(float));
 
         _gl.EnableVertexAttribArray(1);
+
+        _gl.VertexAttribPointer(
+            index: 2,
+            size: 2,
+            VertexAttribPointerType.Float,
+            normalized: false,
+            stride: 8 * sizeof(float),
+            6 * sizeof(float));
+
+        _gl.EnableVertexAttribArray(2);
     }
 
     private void FrameBufferResize(Vector2D<int> size)
